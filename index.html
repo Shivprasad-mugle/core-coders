@@ -1,0 +1,70 @@
+<h2>AI Interview</h2>
+
+<label>Select Mode:</label>
+<select id="mode" onchange="loadQuestion()">
+    <option value="technical">Technical</option>
+    <option value="hr">HR</option>
+</select>
+
+<h3 id="question"></h3>
+
+<input type="text" id="answer" placeholder="Type your answer here">
+<button onclick="submitAnswer()">Submit</button>
+
+<h3 id="result"></h3>
+
+<script>
+
+let currentQuestion = "";
+
+async function loadQuestion() {
+    const mode = document.getElementById("mode").value;
+
+    let url = mode === "technical"
+        ? "http://127.0.0.1:8000/get-technical-question"
+        : "http://127.0.0.1:8000/get-hr-question";
+
+    const response = await fetch(url);
+    const data = await response.json();
+
+    currentQuestion = data.question;
+    document.getElementById("question").innerText = data.question;
+}
+
+// Page load
+window.onload = loadQuestion;
+
+async function submitAnswer() {
+    const answer = document.getElementById("answer").value;
+    const mode = document.getElementById("mode").value;
+
+    const response = await fetch("http://127.0.0.1:8000/submit-answer", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            username: "shivm",
+            mode: mode,
+            question: currentQuestion,
+            answer: answer
+        })
+    });
+
+    const data = await response.json();
+
+    document.getElementById("result").innerHTML = `
+        <p><b>Score:</b> ${data.score}</p>
+        <p><b>Feedback:</b> ${data.feedback}</p>
+    `;
+
+    //  Answer box clear karo
+    document.getElementById("answer").value = "";
+
+    //  2 second baad next question load hoga
+    setTimeout(() => {
+        loadQuestion();
+    }, 2000);
+}
+
+</script>
