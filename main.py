@@ -5,80 +5,134 @@ import sqlite3
 import random
 from fastapi.middleware.cors import CORSMiddleware
 
+
 app = FastAPI()
 create_table()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # allow all origins
+    allow_origins=["http://localhost:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-# Request model
+
 class AnswerRequest(BaseModel):
     username: str
-    mode: str      # 'HR' or 'Technical'
+    mode: str
     question: str
     answer: str
 
-# Questions
+
 hr_questions = [
-    "Tell me about yourself.",
-    "Why should we hire you?",
-    "What are your strengths and weaknesses?",
-    "Where do you see yourself in 5 years?",
-    "Why do you want to work with us?"
+"Tell me about yourself.",
+"Why should we hire you?",
+"What are your strengths?",
+"What is your biggest weakness?",
+"Where do you see yourself in 5 years?",
+"Describe a challenge you faced.",
+"How do you handle pressure?",
+"Describe a time you worked in a team.",
+"How do you manage deadlines?",
+"Why do you want to join our company?",
+"Tell me about a leadership experience.",
+"What motivates you?",
+"How do you resolve conflicts?",
+"Describe a failure and what you learned.",
+"What are your career goals?"
 ]
 
 technical_questions = [
-    "What is time complexity?",
-    "Explain OOPS concepts.",
-    "What is a linked list?",
-    "Difference between list and tuple in Python?",
-    "What is normalization in DBMS?",
-    "Explain recursion with example.",
-    "What is REST API?",
-    "What is difference between stack and queue?"
+
+"What is time complexity?",
+"Explain OOP concepts.",
+"What is polymorphism?",
+"What is inheritance?",
+"What is encapsulation?",
+"What is abstraction?",
+"What is recursion?",
+"Explain linked list.",
+"Difference between stack and queue?",
+"What is an array?",
+"What is REST API?",
+"What is HTTP?",
+"What is database normalization?",
+"What is primary key?",
+"What is foreign key?",
+"What is an algorithm?",
+"What is binary search?",
+"What is merge sort?",
+"What is a hash table?",
+"What is Big O notation?"
+
 ]
 
-# Home
+
 @app.get("/")
 def home():
-    return {"message": "AI interview platform Running"}
+    return {"message": "AI interview platform running"}
 
-# HR question
+
 @app.get("/get-hr-question")
 def get_hr_question():
     question = random.choice(hr_questions)
     return {"question": question}
 
-# Technical question
+
 @app.get("/get-technical-question")
 def get_technical_question():
     question = random.choice(technical_questions)
     return {"question": question}
 
-# Submit answer
+def evaluate_answer(answer, mode):
+    answer = answer.lower()
+    score = 0
+    
+
+    words = answer.split()
+    word_count = len(words)
+
+    # content length
+    if word_count > 40:
+        score += 8
+    elif word_count > 20:
+        score += 5
+    else:
+        score += 2
+
+    hr_keywords = ["team","lead","project","experience","learn","responsibility"]
+
+    tech_keywords = [
+        "algorithm","complexity","data structure","api",
+        "recursion","database","class","object","stack","queue"
+    ]
+
+    keywords = hr_keywords if mode == "hr" else tech_keywords
+
+    for k in keywords:
+        if k in answer:
+            score += 2
+
+    return min(score,20)
+
 @app.post("/submit-answer")
 def submit_answer(data: AnswerRequest):
+    score = evaluate_answer(data.answer, data.mode)
     answer = data.answer.lower()
-    score = 0
+    
 
-    # Base score by word count (better than character length)
     word_count = len(answer.split())
     score += min(word_count // 5, 5)
 
-    # Keywords
     hr_keywords = ["team", "lead", "responsible", "improve", "learn", "project"]
+
     technical_keywords = [
-        "time complexity", "o(", "class", "object",
-        "stack", "queue", "database", "table",
-        "recursion", "array", "linked list",
-        "api", "http", "algorithm"
+        "time complexity","o(","class","object",
+        "stack","queue","database","table",
+        "recursion","array","linked list",
+        "api","http","algorithm"
     ]
 
-    # Mode based scoring
     if data.mode.lower() == "hr":
         for word in hr_keywords:
             if word in answer:
@@ -88,132 +142,148 @@ def submit_answer(data: AnswerRequest):
             if word in answer:
                 score += 2
 
-    # Limit max score
-    score = min(score, 20)
-    # Feedback
-    if score >= 12:
-        feedback = "Excellent answer with strong content and keywords!"
-    elif score >= 7:
-        feedback = "Good answer, but can improve clarity."
-    else:
-        feedback = "Try to add more details and strong keywords."
+    score = min(score,20)
 
-    # Save to DB
-    save_interview(data.username, data.mode, data.question, data.answer, score)
+    if score >= 12:
+        feedback = "Excellent answer!"
+    elif score >= 7:
+        feedback = "Good answer but can improve."
+    else:
+        feedback = "Add more explanation."
+
+    save_interview(data.username,data.mode,data.question,data.answer,score)
 
     return {
-        "username": data.username,
-        "mode": data.mode,
-        "question": data.question,
-        "your_answer": data.answer,
-        "score": score,
-        "feedback": feedback
+        "score":score,
+        "feedback":feedback
     }
 
-# Get all results
+
 @app.get("/get-all-results")
 def get_all_results():
+
     conn = sqlite3.connect("interview.db")
     cursor = conn.cursor()
-    cursor.execute("SELECT username, mode, question, answer, score FROM interviews")
+
+    cursor.execute("SELECT username,mode,question,answer,score FROM interviews")
+
     rows = cursor.fetchall()
     conn.close()
 
-    results = []
+    results=[]
+
     for row in rows:
         results.append({
-            "username": row[0],
-            "mode": row[1],
-            "question": row[2],
-            "answer": row[3],
-            "score": row[4]
+            "username":row[0],
+            "mode":row[1],
+            "question":row[2],
+            "answer":row[3],
+            "score":row[4]
         })
-    return {"results": results}
+
+    return {"results":results}
+
 
 @app.get("/get-average-score/{username}")
-def get_average_score(username: str):
+def get_average_score(username:str):
+
     conn = sqlite3.connect("interview.db")
     cursor = conn.cursor()
 
-    cursor.execute(
-        "SELECT score FROM interviews WHERE username = ?",
-        (username,)
-    )
-
+    cursor.execute("SELECT score FROM interviews WHERE username=?", (username,))
     rows = cursor.fetchall()
+
     conn.close()
 
     if not rows:
-        return {"message": "No interviews found for this user"}
+        return {"message":"No interviews found"}
 
-    scores = [row[0] for row in rows]
+    scores=[row[0] for row in rows]
 
-    total_interviews = len(scores)
-    average_score = sum(scores) / total_interviews
-    highest_score = max(scores)
-    lowest_score = min(scores)
-
-    if average_score >= 15:
-        performance = "Excellent performance! You are interview ready."
-    elif average_score >= 10:
-        performance = "Good performance, but needs improvement."
-    else:
-        performance = "You need serious improvement. Practice more."
+    avg=sum(scores)/len(scores)
 
     return {
-        "username": username,
-        "total_interviews": total_interviews,
-        "average_score": round(average_score, 2),
-        "highest_score": highest_score,
-        "lowest_score": lowest_score,
-        "performance": performance
+        "username":username,
+        "total_interviews":len(scores),
+        "average_score":round(avg,2),
+        "highest_score":max(scores),
+        "lowest_score":min(scores)
     }
 
-    @app.get("/get-mode-average/{username}")
-    def get_mode_average(username: str):
+@app.get("/user-dashboard/{username}")
+def user_dashboard(username:str):
 
-        "weak_area": "Technical"
-        
-        conn = sqlite3.connect("interview.db")
-        cursor = conn.cursor()
+    conn = sqlite3.connect("interview.db")
+    cursor = conn.cursor()
 
-        # HR Scores
-        cursor.execute(
-            "SELECT score FROM interviews WHERE username = ? AND mode = ?",
-            (username, "HR")
-        )
-        hr_rows = cursor.fetchall()
+    cursor.execute("""
+    SELECT mode, score
+    FROM interviews
+    WHERE username = ?
+    """,(username,))
 
-        # Technical Scores
-        cursor.execute(
-            "SELECT score FROM interviews WHERE username = ? AND mode = ?",
-            (username, "Technical")
-        )
-        tech_rows = cursor.fetchall()
+    rows = cursor.fetchall()
+    conn.close()
 
-        conn.close()
+    hr_scores=[]
+    tech_scores=[]
 
-        hr_scores = [row[0] for row in hr_rows]
-        tech_scores = [row[0] for row in tech_rows]
-
-        hr_avg = round(sum(hr_scores) / len(hr_scores), 2) if hr_scores else 0
-        tech_avg = round(sum(tech_scores) / len(tech_scores), 2) if tech_scores else 0
-
-        # Weak area detection
-        if hr_avg == 0 and tech_avg == 0:
-            weak_area = "No interviews yet"
-        elif hr_avg < tech_avg:
-            weak_area = "HR"
-        elif tech_avg < hr_avg:
-            weak_area = "Technical"
+    for r in rows:
+        if r[0].lower()=="hr":
+            hr_scores.append(r[1])
         else:
-            weak_area = "Both are equal"
+            tech_scores.append(r[1])
 
-        return {
-            "username": username,
-            "hr_total": len(hr_scores),
-            "hr_average": hr_avg,
-            "technical_total": len(tech_scores),
-            "technical_average": tech_avg,
-            "weak_area": weak_area
-        }
+    return {
+
+        "hr_interviews":len(hr_scores),
+        "technical_interviews":len(tech_scores),
+
+        "hr_average":round(sum(hr_scores)/len(hr_scores),2) if hr_scores else 0,
+        "technical_average":round(sum(tech_scores)/len(tech_scores),2) if tech_scores else 0
+    }
+@app.get("/leaderboard")
+def leaderboard():
+
+    conn=sqlite3.connect("interview.db")
+    cursor=conn.cursor()
+
+    cursor.execute("""
+
+    SELECT username,
+    AVG(score) as avg_score,
+    COUNT(*) as interviews
+
+    FROM interviews
+
+    GROUP BY username
+
+    HAVING interviews >=3
+
+    ORDER BY avg_score DESC
+
+    LIMIT 10
+
+    """)
+
+    rows=cursor.fetchall()
+    conn.close()
+
+    data=[]
+
+    rank=1
+
+    for r in rows:
+
+        data.append({
+
+        "rank":rank,
+        "username":r[0],
+        "average_score":round(r[1],2),
+        "interviews":r[2]
+
+        })
+
+        rank+=1
+
+    return {"leaderboard":data}
